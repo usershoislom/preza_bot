@@ -1,0 +1,48 @@
+# Presenton (open-source генератор презентаций) + Telegram-бот.
+# Три экземпляра Presenton: Gemini (основной) и два Groq (запасные, у Groq лимиты считаются по моделям).
+# Бот пробует их по порядку и переходит к следующему при ошибке/лимите.
+x-presenton: &presenton
+  image: ghcr.io/presenton/presenton:latest
+  restart: unless-stopped
+  environment: &presenton-env
+    CAN_CHANGE_KEYS: "false"
+    IMAGE_PROVIDER: ${IMAGE_PROVIDER:-pexels}
+    PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+
+services:
+  presenton-gemini:
+    <<: *presenton
+    volumes: ["./app_data:/app_data"]
+    environment:
+      <<: *presenton-env
+      LLM: google
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GOOGLE_MODEL: ${GOOGLE_MODEL:-models/gemini-3.5-flash}
+
+  presenton-groq1:
+    <<: *presenton
+    volumes: ["./app_data_groq1:/app_data"]
+    environment:
+      <<: *presenton-env
+      LLM: custom
+      CUSTOM_LLM_URL: https://api.groq.com/openai/v1
+      CUSTOM_LLM_API_KEY: ${GROQ_API_KEY}
+      CUSTOM_MODEL: ${GROQ_MODEL_1:-openai/gpt-oss-120b}
+
+  presenton-groq2:
+    <<: *presenton
+    volumes: ["./app_data_groq2:/app_data"]
+    environment:
+      <<: *presenton-env
+      LLM: custom
+      CUSTOM_LLM_URL: https://api.groq.com/openai/v1
+      CUSTOM_LLM_API_KEY: ${GROQ_API_KEY}
+      CUSTOM_MODEL: ${GROQ_MODEL_2:-llama-3.3-70b-versatile}
+
+  bot:
+    build: .
+    depends_on: [presenton-gemini, presenton-groq1, presenton-groq2]
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      PRESENTON_URLS: http://presenton-gemini:80,http://presenton-groq1:80,http://presenton-groq2:80
+    restart: unless-stopped
